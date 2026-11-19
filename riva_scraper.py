@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import os
 import time
 import re
 from datetime import datetime
@@ -16,13 +15,14 @@ ALLOWED_LOCATIONS = [
     "italy", "france", "spain", "monaco", "turkey", "greece", "croatia",
     "portugal", "netherlands", "germany", "uk", "united kingdom",
     "cannes", "antibes", "nice", "genoa", "genova", "marmaris", "bodrum",
-    "istanbul", "fethiye", "balearic", "spain", "norway", "switzerland"
+    "istanbul", "fethiye", "balearic", "spain", "norway", "switzerland",
+    "giesbeek", "netherlands"
 ]
 
-SEARCH_URL = "https://www.theyachtmarket.com/en/boats-for-sale/riva/"
+SEARCH_URL = "https://www.rightboat.com/boats-for-sale/riva?length_min=65"
 
 def clean_price(text):
-    if not text or "POA" in text.upper():
+    if not text or "POA" in text.upper() or "Request" in text:
         return None, None
     text = text.upper().replace(" ", "").replace(",", "").replace(".", "")
     match = re.search(r'(€|EUR|\$|USD|£|GBP)\s*([\d]+)', text)
@@ -38,9 +38,14 @@ def clean_price(text):
     return None, None
 
 def extract_length(text):
+    # Cherche en mètres
     m = re.search(r'([\d\.]+)\s*m', text.lower())
     if m:
         return float(m.group(1))
+    # Cherche en pieds
+    ft = re.search(r'([\d\.]+)\s*(ft|feet|\')', text.lower())
+    if ft:
+        return float(ft.group(1)) * 0.3048
     return None
 
 def is_europe_or_turkey(location):
@@ -49,115 +54,8 @@ def is_europe_or_turkey(location):
     loc = location.lower()
     return any(kw in loc for kw in ALLOWED_LOCATIONS)
 
-def scrape_theyachtmarket():
+def scrape_rightboat():
     print(f"Ouverture de {SEARCH_URL}", flush=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.set_extra_http_headers({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
-        try:
-            page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=60000)
-            time.sleep(5)
-            html = page.content()
-            browser.close()
-            return html
-        except Exception as e:
-            print(f"Erreur : {e}", flush=True)
-            browser.close()
-            return None
-
-def parse_theyachtmarket(html):
-    soup = BeautifulSoup(html, "lxml")
-    results = []
-
-    # Cherche les blocs de listings (h3 avec liens)
-    listings = soup.find_all("h3")
-    print(f"  {len(listings)} titres h3 trouvés", flush=True)
-
-    for h3 in listings:
-        try:
-            link = h3.find("a")
-            if not link:
-                continue
-            title = link.get_text(strip=True)
-            if "riva" not in title.lower():
-                continue
-
-            url = urljoin(SEARCH_URL, link.get("href", ""))
-
-            # Le bloc parent contient le reste des infos
-            parent = h3.find_parent()
-            text = parent.get_text(" ", strip=True) if parent else ""
-
-            # Prix
-            price_match = re.search(r'([$€£]|EUR|USD|GBP)\s*[\d,\.]+|[\d,\.]+\s*([$€£]|EUR|USD|GBP)', text)
-            price_text = price_match.group(0) if price_match else ""
-            price, currency = clean_price(price_text)
-            if not price or currency not in ALLOWED_CURRENCIES:
-                continue
-
-            # Année
-            year_match = re.search(r'(19|20)\d{2}', text)
-            year = year_match.group(0) if year_match else ""
-
-            # Longueur
-            length = extract_length(text)
-            if not length or length < MIN_LENGTH_M:
-                continue
-
-            # Lieu (souvent juste avant le prix ou après le titre)
-            loc_match = re.search(r'(Italy|France|Spain|Monaco|Turkey|Greece|Croatia|Portugal|Netherlands|Germany|United Kingdom|UK|Balearic|Norway|Switzerland)', text, re.I)
-            location = loc_match.group(0) if loc_match else ""
-            if not is_europe_or_turkey(location):
-                continue
-
-            # TVA
-            tva = "-"
-            if "tax paid" in text.lower() or "tva payée" in text.lower():
-                tva = "VAT Paid"
-            elif "tax not paid" in text.lower() or "excluded" in text.lower():
-                tva = "VAT Unpaid / Ex VAT"
-
-            # Ignore sold
-            if "sold" in text.lower():
-                continue
-
-            results.append({
-                "nom": title,
-                "année": year,
-                "prix": price,
-                "devise": currency,
-                "lieu": location,
-                "TVA": tva,
-                "source": "theyachtmarket.com",
-                "longueur": round(length, 1),
-                "url": url,
-                "remarque": ""
-            })
-        except Exception as e:
-            continue
-
-    return results
-
-def main():
-    print(f"=== Démarrage robot {CHANTIER} – {datetime.now()} ===", flush=True)
-    html = scrape_theyachtmarket()
-    if not html:
-        print("Impossible de charger la page", flush=True)
-        time.sleep(30)
-        return
-
-    listings = parse_theyachtmarket(html)
-    print(f"\n=== Résultats ({len(listings)}) ===", flush=True)
-    for item in listings:
-        line = f"{item['nom']}|{item['année']}|{item['prix']}|{item['devise']}|{item['lieu']}|{item['TVA']}|{item['source']}|{item['longueur']}|{item['url']}|{item['remarque']}"
-        print(line, flush=True)
-
-    print(f"\nAnnonces retenues : {len(listings)}", flush=True)
-    print("Script actif 90 secondes...", flush=True)
-    time.sleep(90)
-
-if __name__ == "__main__":
-    main()
+        page = 

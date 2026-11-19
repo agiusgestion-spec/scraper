@@ -1,0 +1,1 @@
+worker: python riva_scraper.py

@@ -7,7 +7,8 @@ from urllib.parse import urljoin, urlparse
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
-# ============== CONFIG ==============
+print("=== SCRIPT DÉMARRÉ ===", flush=True)
+
 CHANTIER = os.getenv("CHANTIER", "Riva")
 MIN_LENGTH_M = float(os.getenv("MIN_LENGTH_M", "20"))
 ALLOWED_CURRENCIES = {"EUR", "USD", "GBP"}
@@ -17,8 +18,6 @@ ALLOWED_LOCATIONS = [
     "cannes", "antibes", "monaco", "la spezia", "genoa", "genova",
     "marmaris", "bodrum", "istanbul", "fethiye", "nice", "porto cervo"
 ]
-
-OUTPUT_FILE = f"annonces_{CHANTIER.lower()}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
 
 SEARCH_URLS = [
     f"https://www.yachtworld.com/boats-for-sale/make-{CHANTIER.lower()}/length-65-ft/",
@@ -65,6 +64,7 @@ def extract_length(text):
     return None
 
 def scrape_with_playwright(url):
+    print(f"Ouverture de {url}", flush=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -76,7 +76,7 @@ def scrape_with_playwright(url):
             browser.close()
             return html
         except Exception as e:
-            print(f"Erreur sur {url}: {e}")
+            print(f"Erreur sur {url}: {e}", flush=True)
             browser.close()
             return None
 
@@ -84,6 +84,7 @@ def parse_listing(html, source_name, base_url):
     soup = BeautifulSoup(html, "lxml")
     results = []
     cards = soup.select("div.listing, div.boat-card, article, .boat-item, .yw-card, [class*='card'], [class*='listing']")
+    print(f"  {len(cards)} cartes trouvées", flush=True)
 
     for card in cards[:40]:
         try:
@@ -137,12 +138,12 @@ def parse_listing(html, source_name, base_url):
     return results
 
 def main():
-    print(f"=== Démarrage robot {CHANTIER} – {datetime.now()} ===")
+    print(f"=== Démarrage robot {CHANTIER} – {datetime.now()} ===", flush=True)
     all_listings = []
     seen = set()
 
     for search_url in SEARCH_URLS:
-        print(f"Scan : {search_url}")
+        print(f"Scan : {search_url}", flush=True)
         html = scrape_with_playwright(search_url)
         if not html:
             continue
@@ -152,20 +153,13 @@ def main():
             if item["url"] not in seen:
                 seen.add(item["url"])
                 all_listings.append(item)
-                print(f"  + {item['nom']} | {item['année']} | {item['prix']} {item['devise']}")
-        time.sleep(4)
+                line = f"{item['nom']}|{item['année']}|{item['prix']}|{item['devise']}|{item['lieu']}|{item['TVA']}|{item['source']}|{item['longueur']}|{item['url']}|{item['remarque']}"
+                print(line, flush=True)
 
-    all_listings.sort(key=lambda x: (x["année"] or "0", x["prix"] or "0"), reverse=True)
-
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        for item in all_listings:
-            line = f"{item['nom']}|{item['année']}|{item['prix']}|{item['devise']}|{item['lieu']}|{item['TVA']}|{item['source']}|{item['longueur']}|{item['url']}|{item['remarque']}"
-            f.write(line + "\n")
-            print(line)
-
-    print(f"\n=== Terminé ===")
-    print(f"Annonces retenues : {len(all_listings)}")
-    print(f"Fichier généré : {OUTPUT_FILE}")
+    print(f"\n=== Terminé ===", flush=True)
+    print(f"Annonces retenues : {len(all_listings)}", flush=True)
+    print("Le script va rester actif 90 secondes pour que tu puisses lire les logs...", flush=True)
+    time.sleep(90)
 
 if __name__ == "__main__":
     main()
